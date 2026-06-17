@@ -36,6 +36,13 @@ export default function MeasurementsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem(
+      "fitatelier-measurements",
+      JSON.stringify(formData)
+    );
+  }, [formData]);
+
   const next = () => setStep(step + 1);
   const prev = () => setStep(step - 1);
   const totalSteps = 5;
@@ -78,12 +85,7 @@ export default function MeasurementsPage() {
   };
 
   const saveProfile = () => {
-    localStorage.setItem(
-      "fitatelier-measurements",
-      JSON.stringify(formData)
-    );
-
-    alert("Perfil guardado correctamente");
+    alert("Perfil actualizado");
   };
 
   return (
@@ -476,10 +478,10 @@ export default function MeasurementsPage() {
 
               <div
                 className={`h-3 rounded-full ${progress === 100
-                    ? "bg-emerald-500"
-                    : "bg-green-600"
+                  ? "bg-emerald-500"
+                  : "bg-green-600"
                   }`}
-                
+
                 style={{
                   width: `${progress}%`,
                 }}
