@@ -11,6 +11,7 @@ export type BodyMeasurements = {
   weight: number | "";
   age: number | "";
 
+  neck: number | "";       // NEW – mejora cuello en 3D
   bust: number | "";
   underBust: number | "";
   waist: number | "";
@@ -19,6 +20,7 @@ export type BodyMeasurements = {
   hips: number | "";
   thigh: number | "";
   calf: number | "";
+  ankle: number | "";      // NEW – mejora tobillo en 3D
   legLength: number | "";
 
   armLength: number | "";
@@ -30,6 +32,7 @@ export const EMPTY_MEASUREMENTS: BodyMeasurements = {
   height: "",
   weight: "",
   age: "",
+  neck: "",
   bust: "",
   underBust: "",
   waist: "",
@@ -37,6 +40,7 @@ export const EMPTY_MEASUREMENTS: BodyMeasurements = {
   hips: "",
   thigh: "",
   calf: "",
+  ankle: "",
   legLength: "",
   armLength: "",
   biceps: "",
@@ -48,6 +52,7 @@ export const MEASUREMENT_FIELDS: (keyof BodyMeasurements)[] = [
   "height",
   "weight",
   "age",
+  "neck",
   "bust",
   "underBust",
   "waist",
@@ -55,6 +60,7 @@ export const MEASUREMENT_FIELDS: (keyof BodyMeasurements)[] = [
   "hips",
   "thigh",
   "calf",
+  "ankle",
   "legLength",
   "armLength",
   "biceps",
@@ -64,22 +70,27 @@ export const MEASUREMENT_FIELDS: (keyof BodyMeasurements)[] = [
 /** Fields strictly required to render an accurate avatar. */
 const CORE_FIELDS: (keyof BodyMeasurements)[] = ["height", "bust", "waist", "hips"];
 
-/** Sane human ranges, used to clamp/validate <input type="number"> values. */
-export const FIELD_RANGES: Record<keyof BodyMeasurements, { min: number; max: number; unit: string }> = {
-  height: { min: 120, max: 220, unit: "cm" },
-  weight: { min: 30, max: 200, unit: "kg" },
-  age: { min: 12, max: 100, unit: "años" },
-  bust: { min: 60, max: 160, unit: "cm" },
-  underBust: { min: 55, max: 150, unit: "cm" },
-  waist: { min: 45, max: 160, unit: "cm" },
-  shoulders: { min: 28, max: 60, unit: "cm" },
-  hips: { min: 60, max: 170, unit: "cm" },
-  thigh: { min: 30, max: 90, unit: "cm" },
-  calf: { min: 20, max: 60, unit: "cm" },
-  legLength: { min: 50, max: 110, unit: "cm" },
-  armLength: { min: 40, max: 80, unit: "cm" },
-  biceps: { min: 15, max: 50, unit: "cm" },
-  wrist: { min: 10, max: 25, unit: "cm" },
+/** Sane human ranges, used to clamp/validate on blur. */
+export const FIELD_RANGES: Record<
+  keyof BodyMeasurements,
+  { min: number; max: number; unit: string }
+> = {
+  height:    { min: 120, max: 220, unit: "cm" },
+  weight:    { min: 30,  max: 200, unit: "kg" },
+  age:       { min: 12,  max: 100, unit: "años" },
+  neck:      { min: 25,  max: 55,  unit: "cm" },
+  bust:      { min: 60,  max: 160, unit: "cm" },
+  underBust: { min: 55,  max: 150, unit: "cm" },
+  waist:     { min: 45,  max: 160, unit: "cm" },
+  shoulders: { min: 28,  max: 60,  unit: "cm" },
+  hips:      { min: 60,  max: 170, unit: "cm" },
+  thigh:     { min: 30,  max: 90,  unit: "cm" },
+  calf:      { min: 20,  max: 60,  unit: "cm" },
+  ankle:     { min: 15,  max: 40,  unit: "cm" },
+  legLength: { min: 50,  max: 110, unit: "cm" },
+  armLength: { min: 40,  max: 80,  unit: "cm" },
+  biceps:    { min: 15,  max: 50,  unit: "cm" },
+  wrist:     { min: 10,  max: 25,  unit: "cm" },
 };
 
 const STORAGE_KEY = "fitatelier-measurements";
@@ -102,7 +113,6 @@ export function saveMeasurements(data: BodyMeasurements) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
-    // localStorage can throw in private-browsing / quota-exceeded scenarios.
     // Silently ignore — saving is best-effort until there's a real backend.
   }
 }
@@ -128,18 +138,16 @@ export function clampField(key: keyof BodyMeasurements, value: number): number {
 /*  Human-scale avatar geometry                                           */
 /* ────────────────────────────────────────────────────────────────────── */
 
-/**
- * Fallback values used only while a field is empty, so the avatar still
- * renders something reasonable before the form is fully completed.
- */
 const FALLBACK_CM = {
-  height: 165,
-  bust: 92,
-  waist: 72,
-  hips: 96,
+  height:    165,
+  neck:      34,
+  bust:      92,
+  waist:     72,
+  hips:      96,
   shoulders: 40,
   armLength: 56,
   legLength: 78,
+  ankle:     22,
 };
 
 export type AvatarMetrics = {
@@ -152,6 +160,7 @@ export type AvatarMetrics = {
   head: { cx: number; cy: number; r: number };
   neckTopY: number;
   neckBottomY: number;
+  neckHalfWidth: number;  // NEW
 
   shoulderY: number;
   shoulderHalfWidth: number;
@@ -167,6 +176,7 @@ export type AvatarMetrics = {
 
   kneeY: number;
   ankleY: number;
+  ankleHalfWidth: number; // NEW
   wristY: number;
 
   armHalfWidth: number;
@@ -176,56 +186,42 @@ export type AvatarMetrics = {
 /**
  * Converts a body-part circumference (cm, measured with a tape) into an
  * approximate frontal width (cm). Assumes a roughly elliptical cross
- * section where depth ≈ 0.86 × width — a standard anthropometric
- * approximation used for garment-fit silhouettes.
+ * section where depth ≈ 0.86 × width.
  */
 function circumferenceToFrontalWidth(circumferenceCm: number): number {
   return circumferenceCm / Math.PI / 0.86;
 }
 
-/**
- * Computes every coordinate needed to draw a human-proportioned avatar
- * for a given body profile, inside a fixed-size canvas.
- *
- * The figure always fills the canvas height (so avatars are easy to look
- * at side by side in the UI), but every horizontal measurement is derived
- * from the SAME per-person scale factor — so a person with wider hips
- * relative to their height will actually look that way. This is what
- * makes the avatar "a escala humana": internally consistent, real
- * proportions, not an arbitrary illustration.
- */
 export function computeAvatarMetrics(
   data: BodyMeasurements,
   canvasWidth = 240,
   canvasHeight = 480
 ): AvatarMetrics {
-  const heightCm = Number(data.height) || FALLBACK_CM.height;
-  const bustCm = Number(data.bust) || FALLBACK_CM.bust;
-  const waistCm = Number(data.waist) || FALLBACK_CM.waist;
-  const hipsCm = Number(data.hips) || FALLBACK_CM.hips;
+  const heightCm    = Number(data.height)    || FALLBACK_CM.height;
+  const neckCm      = Number(data.neck)      || FALLBACK_CM.neck;
+  const bustCm      = Number(data.bust)      || FALLBACK_CM.bust;
+  const waistCm     = Number(data.waist)     || FALLBACK_CM.waist;
+  const hipsCm      = Number(data.hips)      || FALLBACK_CM.hips;
   const shouldersCm = Number(data.shoulders) || FALLBACK_CM.shoulders;
+  const ankleCm     = Number(data.ankle)     || FALLBACK_CM.ankle;
 
-  // Leave a small margin so the head/feet don't touch the canvas edges.
   const figureHeightPx = canvasHeight * 0.94;
-  const topMargin = canvasHeight * 0.03;
-  const scale = figureHeightPx / heightCm; // px per cm, specific to this person
+  const topMargin      = canvasHeight * 0.03;
+  const scale          = figureHeightPx / heightCm;
 
-  // Classical ~7.5-head figure canon (fractions of total height, from the
-  // top of the head). This is what gives the avatar believable human
-  // proportions regardless of the person's absolute height.
   const headHeightCm = heightCm / 7.5;
-  const headR = (headHeightCm / 2) * scale;
+  const headR        = (headHeightCm / 2) * scale;
 
   const FRAC = {
-    neckTop: 0.118,
+    neckTop:    0.118,
     neckBottom: 0.145,
-    shoulder: 0.155,
-    bust: 0.27,
-    waist: 0.4,
-    hip: 0.5,
-    wrist: 0.46,
-    knee: 0.745,
-    ankle: 0.965,
+    shoulder:   0.155,
+    bust:       0.27,
+    waist:      0.4,
+    hip:        0.5,
+    wrist:      0.46,
+    knee:       0.745,
+    ankle:      0.965,
   };
 
   const y = (frac: number) => topMargin + frac * heightCm * scale;
@@ -237,24 +233,26 @@ export function computeAvatarMetrics(
     centerX: canvasWidth / 2,
 
     head: { cx: canvasWidth / 2, cy: topMargin + headR, r: headR },
-    neckTopY: y(FRAC.neckTop),
-    neckBottomY: y(FRAC.neckBottom),
+    neckTopY:      y(FRAC.neckTop),
+    neckBottomY:   y(FRAC.neckBottom),
+    neckHalfWidth: (circumferenceToFrontalWidth(neckCm) / 2) * scale,
 
-    shoulderY: y(FRAC.shoulder),
+    shoulderY:         y(FRAC.shoulder),
     shoulderHalfWidth: (shouldersCm / 2) * scale,
 
-    bustY: y(FRAC.bust),
+    bustY:         y(FRAC.bust),
     bustHalfWidth: (circumferenceToFrontalWidth(bustCm) / 2) * scale,
 
-    waistY: y(FRAC.waist),
+    waistY:         y(FRAC.waist),
     waistHalfWidth: (circumferenceToFrontalWidth(waistCm) / 2) * scale,
 
-    hipY: y(FRAC.hip),
+    hipY:         y(FRAC.hip),
     hipHalfWidth: (circumferenceToFrontalWidth(hipsCm) / 2) * scale,
 
-    kneeY: y(FRAC.knee),
-    ankleY: y(FRAC.ankle),
-    wristY: y(FRAC.wrist),
+    kneeY:          y(FRAC.knee),
+    ankleY:         y(FRAC.ankle),
+    ankleHalfWidth: (circumferenceToFrontalWidth(ankleCm) / 2) * scale,
+    wristY:         y(FRAC.wrist),
 
     armHalfWidth: 5.2 * scale,
     legHalfWidth: 7.5 * scale,
