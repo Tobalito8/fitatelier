@@ -201,7 +201,7 @@ export default function DesignerPage() {
   );
 }
 
-/* ── Dress overlay: pure SVG, anchored to the avatar's real metrics ── */
+/* ── Dress overlay: pure SVG, anchored to the avatar's real metrics  ── */
 function DressOverlay({
   design,
   metrics,
