@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import AvatarFigure from "@/components/AvatarFigure";
+import AvatarFigure3D from "@/components/AvatarFigure3D";
 import {
   BodyMeasurements,
   EMPTY_MEASUREMENTS,
@@ -22,6 +23,7 @@ export default function MeasurementsPage() {
   const [formData, setFormData]   = useState<BodyMeasurements>(EMPTY_MEASUREMENTS);
   const [hydrated, setHydrated]   = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+  const [viewMode, setViewMode]   = useState<"2d" | "3d">("3d");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -206,20 +208,50 @@ export default function MeasurementsPage() {
           {/* ── Avatar + summary ── */}
           <aside className="h-fit space-y-6">
             <div className="rounded-3xl bg-white p-6 shadow">
-              <h2 className="mb-1 text-xl font-bold">Tu avatar</h2>
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Tu avatar</h2>
+                <div className="flex rounded-full border bg-stone-50 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("3d")}
+                    className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                      viewMode === "3d" ? "bg-black text-white" : "text-gray-500"
+                    }`}
+                  >
+                    3D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("2d")}
+                    className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                      viewMode === "2d" ? "bg-black text-white" : "text-gray-500"
+                    }`}
+                  >
+                    2D
+                  </button>
+                </div>
+              </div>
               <p className="mb-4 text-xs text-gray-500">
                 {readyForAvatar
                   ? "Generado a escala real con tus medidas"
                   : "Completa altura, busto, cintura y cadera para verlo a escala"}
               </p>
 
-              <div className="flex items-center justify-center rounded-2xl bg-stone-50 py-4">
-                <AvatarFigure
-                  measurements={formData}
-                  width={150}
-                  height={300}
-                  showMeasurementGuides={readyForAvatar}
-                />
+              <div className="flex items-center justify-center overflow-hidden rounded-2xl bg-stone-50 py-4">
+                {viewMode === "3d" ? (
+                  <AvatarFigure3D
+                    measurements={formData}
+                    width={260}
+                    height={360}
+                  />
+                ) : (
+                  <AvatarFigure
+                    measurements={formData}
+                    width={150}
+                    height={300}
+                    showMeasurementGuides={readyForAvatar}
+                  />
+                )}
               </div>
 
               {!readyForAvatar && (
@@ -309,6 +341,7 @@ function NumberField({
 
   // Keep in sync when the parent value changes (e.g. initial load from localStorage).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRaw(value === "" ? "" : String(value));
     setError("");
   }, [value]);
