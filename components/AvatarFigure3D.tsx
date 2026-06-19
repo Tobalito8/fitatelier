@@ -4,12 +4,19 @@
  * AvatarFigure3D – maniquí 3D construido con Three.js a partir de medidas reales.
  *
  * Geometría:
- *  - Torso:  LatheGeometry suavizado con CatmullRomCurve para forma de reloj de arena real
+ *  - Torso:  LatheGeometry suavizado con CatmullRomCurve (perfil "centripetal")
+ *            + escala elíptica (más ancho que profundo, como un torso real)
  *  - Cabeza: SphereGeometry escalada + pelo + ojos
- *  - Brazos: CylinderGeometry cónicos (bíceps → muñeca)
- *  - Piernas: CylinderGeometry cónicos (muslo → tobillo) + pie
+ *  - Brazos: LatheGeometry con curva de bíceps/antebrazo (no son conos rectos)
+ *  - Piernas: LatheGeometry con curva de cuádriceps/pantorrilla + pie
  *
  * Todas las dimensiones se derivan de las medidas del usuario (en cm).
+ *
+ * Nota sobre el techo de realismo de este enfoque: al estar construido con
+ * primitivas (lathe + esferas de articulación), siempre habrá una unión
+ * visible entre piezas, aunque se disimule con las esferas de empalme.
+ * Para eliminarla por completo se necesitaría una malla base humana con
+ * "morph targets" en vez de piezas separadas.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -95,6 +102,17 @@ export default function AvatarFigure3D({
       const WRIST_Y    = ELBOW_Y - F_ARM_LEN;
 
       /* ──────────────────────────────────────────────
+         FACTORES DE FORMA ELÍPTICA
+         El torso/extremidades humanas son más anchos (X) que profundos (Z),
+         no círculos perfectos. Se preserva aprox. el radio promedio
+         (X*Z ≈ 1) para no alterar demasiado el "tamaño" derivado de la
+         circunferencia real.
+         ────────────────────────────────────────────── */
+      const TORSO_X = 1.13, TORSO_Z = 0.85;   // pecho/cintura/cadera
+      const ARM_X   = 1.05, ARM_Z   = 0.92;   // brazos, leve achatado
+      const LEG_X   = 1.10, LEG_Z   = 0.90;   // muslos/pantorrillas
+
+      /* ──────────────────────────────────────────────
          ESCENA
          ────────────────────────────────────────────── */
       const scene = new THREE.Scene();
@@ -151,11 +169,19 @@ export default function AvatarFigure3D({
 
       /* ──────────────────────────────────────────────
          MATERIALES
+         MeshPhysicalMaterial con un toque de "sheen" para que la piel
+         tenga un brillo suave en los bordes, en vez del aspecto plano
+         de MeshStandardMaterial.
          ────────────────────────────────────────────── */
-      const skinMat = new THREE.MeshStandardMaterial({
-        color:     new THREE.Color(0xd4956a),
-        roughness: 0.60,
-        metalness: 0.02,
+      const skinMat = new THREE.MeshPhysicalMaterial({
+        color:            new THREE.Color(0xd4956a),
+        roughness:        0.55,
+        metalness:        0.0,
+        clearcoat:        0.05,
+        clearcoatRoughness: 0.6,
+        sheen:            0.18,
+        sheenColor:       new THREE.Color(0xffe0c2),
+        sheenRoughness:   0.7,
       });
       const hairMat = new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.95 });
       const eyeMat  = new THREE.MeshStandardMaterial({ color: 0x0e0805, roughness: 0.35 });
@@ -178,33 +204,43 @@ export default function AvatarFigure3D({
         return m;
       }
 
+      /** Genera una LatheGeometry suavizada a partir de pocos puntos de
+       *  control [radio, alturaLocal]. Útil tanto para el torso como para
+       *  extremidades con curva de músculo (bíceps, pantorrilla, etc). */
+      function lathe(points: THREE.Vector3[], radialSegments = 32, samples = 40) {
+        const curve = new THREE.CatmullRomCurve3(points, false, "centripetal");
+        const pts = curve
+          .getPoints(samples)
+          .map((p: THREE.Vector3) => new THREE.Vector2(Math.max(0.02, p.x), p.y));
+        return new THREE.LatheGeometry(pts, radialSegments);
+      }
+
       /* ──────────────────────────────────────────────
-         TORSO  (LatheGeometry + CatmullRom)
+         TORSO
          Puntos de control: [radio, alturaY] en el plano XY
-         CatmullRomCurve3 los suaviza → LatheGeometry los gira 360°
          ────────────────────────────────────────────── */
       const torsoCtrl: THREE.Vector3[] = [
         // de abajo (entrepierna) hacia arriba (cuello)
-        new THREE.Vector3(hipsR  * 0.15, CROTCH_Y - H * 0.01, 0), // cierre inferior
-        new THREE.Vector3(hipsR  * 0.35, CROTCH_Y,             0),
-        new THREE.Vector3(hipsR  * 0.78, HIP_Y   - H * 0.03,  0),
-        new THREE.Vector3(hipsR,          HIP_Y,                0),
-        new THREE.Vector3(hipsR  * 0.97, HIP_Y   + H * 0.04,  0),
-        new THREE.Vector3(waistR,         WAIST_Y,              0),
-        new THREE.Vector3(uBustR,         UBUST_Y,              0),
-        new THREE.Vector3(bustR,          BUST_Y,               0),
-        new THREE.Vector3(bustR  * 0.90, ARMPIT_Y,             0),
-        new THREE.Vector3(shldrHW,        SHLDR_Y,              0),
-        new THREE.Vector3(neckR  * 1.9,  NBOT_Y,               0),
-        new THREE.Vector3(neckR,          NTOP_Y,               0),
+        new THREE.Vector3(hipsR  * 0.18, CROTCH_Y - H * 0.015, 0), // cierre inferior
+        new THREE.Vector3(hipsR  * 0.55, CROTCH_Y,              0),
+        new THREE.Vector3(hipsR  * 0.92, HIP_Y - H * 0.025,   0),
+        new THREE.Vector3(hipsR,          HIP_Y,                 0),
+        new THREE.Vector3(hipsR  * 0.94, HIP_Y + H * 0.035,    0),
+        new THREE.Vector3(waistR * 1.02, WAIST_Y - H * 0.01,   0),
+        new THREE.Vector3(waistR,         WAIST_Y,               0),
+        new THREE.Vector3(uBustR,         UBUST_Y,               0),
+        new THREE.Vector3(bustR,          BUST_Y,                0),
+        new THREE.Vector3(bustR  * 0.94, ARMPIT_Y - H * 0.015, 0),
+        new THREE.Vector3(bustR  * 0.78, ARMPIT_Y,              0),
+        new THREE.Vector3(shldrHW * 1.05, SHLDR_Y - H * 0.012, 0),
+        new THREE.Vector3(shldrHW,        SHLDR_Y,               0),
+        new THREE.Vector3(shldrHW * 0.72, SHLDR_Y + H * 0.012, 0),
+        new THREE.Vector3(neckR  * 1.35, NBOT_Y,                0),
+        new THREE.Vector3(neckR,          NTOP_Y,                0),
       ];
 
-      const torsoCurve  = new THREE.CatmullRomCurve3(torsoCtrl, false, "catmullrom", 0.5);
-      const lathePoints = torsoCurve
-        .getPoints(100)
-        .map((p: THREE.Vector3) => new THREE.Vector2(Math.max(0, p.x), p.y));
-
-      mkMesh(new THREE.LatheGeometry(lathePoints, 48), skinMat);
+      const torsoMesh = mkMesh(lathe(torsoCtrl, 56, 120), skinMat);
+      torsoMesh.scale.set(TORSO_X, 1, TORSO_Z);
 
       /* ──────────────────────────────────────────────
          CABEZA
@@ -267,62 +303,131 @@ export default function AvatarFigure3D({
       });
 
       /* ──────────────────────────────────────────────
-         BRAZOS  (cilindros cónicos)
+         BRAZOS  (lathe con curva de bíceps/antebrazo, pose A)
          ────────────────────────────────────────────── */
-      [-1, 1].forEach((side) => {
-        const ax = shldrHW * side * 1.10;
+      const ARM_TILT = 0.16; // rad, ligera apertura tipo "pose A"
 
-        // Brazo superior (bíceps → codo)
+      // El hombro real (silueta ya escalada por TORSO_X) define dónde
+      // arrancan brazo y bola de empalme — así no quedan huecos.
+      const shoulderEdgeX = shldrHW * TORSO_X;
+
+      [-1, 1].forEach((side) => {
+        const ax = (shoulderEdgeX + bicepsR * 0.55) * side;
+
+        // Bola de hombro: rellena la unión torso ↔ brazo
         mkMesh(
-          new THREE.CylinderGeometry(bicepsR * 0.78, bicepsR, U_ARM_LEN, 20),
+          new THREE.SphereGeometry(bicepsR * 0.95, 20, 20),
+          skinMat,
+          [shoulderEdgeX * side * 0.92, SHLDR_Y - bicepsR * 0.2, 0],
+        );
+
+        // Brazo superior: bíceps abultado cerca del hombro, se afina al codo
+        const upperProfile = [
+          new THREE.Vector3(bicepsR * 1.00,  U_ARM_LEN / 2,         0),
+          new THREE.Vector3(bicepsR * 1.10,  U_ARM_LEN * 0.18,      0),
+          new THREE.Vector3(bicepsR * 0.88, -U_ARM_LEN * 0.22,      0),
+          new THREE.Vector3(bicepsR * 0.74, -U_ARM_LEN / 2,         0),
+        ];
+        const upperArm = mkMesh(
+          lathe(upperProfile, 24, 28),
           skinMat,
           [ax, (SHLDR_Y + ELBOW_Y) / 2, 0],
+          [ARM_X, 1, ARM_Z],
         );
-        // Antebrazo (codo → muñeca)
+        upperArm.rotation.z = -side * ARM_TILT;
+
+        // Bola de codo
         mkMesh(
-          new THREE.CylinderGeometry(wristR, bicepsR * 0.74, F_ARM_LEN, 20),
+          new THREE.SphereGeometry(bicepsR * 0.74, 18, 18),
           skinMat,
-          [ax, (ELBOW_Y + WRIST_Y) / 2, 0],
+          [ax + Math.sin(-side * ARM_TILT) * (U_ARM_LEN / 2), ELBOW_Y, 0],
         );
+
+        // Antebrazo: más grueso cerca del codo, se afina hacia la muñeca
+        const lowerProfile = [
+          new THREE.Vector3(bicepsR * 0.72,  F_ARM_LEN / 2,         0),
+          new THREE.Vector3(bicepsR * 0.60,  F_ARM_LEN * 0.15,      0),
+          new THREE.Vector3(bicepsR * 0.40, -F_ARM_LEN * 0.35,      0),
+          new THREE.Vector3(wristR,         -F_ARM_LEN / 2,         0),
+        ];
+        const lowerArm = mkMesh(
+          lathe(lowerProfile, 24, 28),
+          skinMat,
+          [ax + Math.sin(-side * ARM_TILT) * (U_ARM_LEN / 2), (ELBOW_Y + WRIST_Y) / 2, 0],
+          [ARM_X, 1, ARM_Z],
+        );
+        lowerArm.rotation.z = -side * ARM_TILT * 0.5;
+
         // Mano
         mkMesh(
           new THREE.SphereGeometry(wristR * 1.35, 18, 18),
           skinMat,
-          [ax, WRIST_Y - wristR * 1.05, 0],
+          [ax + Math.sin(-side * ARM_TILT) * (U_ARM_LEN / 2 + F_ARM_LEN / 2), WRIST_Y - wristR * 1.05, 0],
           [1.25, 0.72, 0.62],
         );
       });
 
       /* ──────────────────────────────────────────────
-         PIERNAS  (cilindros cónicos)
+         PIERNAS  (lathe con curva de cuádriceps/pantorrilla)
          ────────────────────────────────────────────── */
-      const LEG_X      = hipsR * 0.40;
-      const THIGH_LEN  = KNEE_Y  - CROTCH_Y;
+      const hipEdgeX   = hipsR * TORSO_X * 0.40;
+      // Empieza un poco más arriba del cierre del torso para que el muslo
+      // se solape con él y no quede un hueco visible en la entrepierna.
+      const THIGH_TOP  = CROTCH_Y + H * 0.012;
+      const THIGH_LEN  = KNEE_Y  - THIGH_TOP;
       const CALF_LEN   = KNEE_Y  - ANKLE_Y;
 
       [-1, 1].forEach((side) => {
-        const lx = LEG_X * side;
+        const lx = hipEdgeX * side;
 
-        // Muslo (entrepierna → rodilla)
+        // Bola de cadera: rellena la unión torso ↔ muslo
         mkMesh(
-          new THREE.CylinderGeometry(calfR * 1.05, thighR, THIGH_LEN, 20),
+          new THREE.SphereGeometry(thighR * 0.85, 20, 20),
           skinMat,
-          [lx, (CROTCH_Y + KNEE_Y) / 2, 0],
+          [lx * 0.85, THIGH_TOP, 0],
         );
 
-        // Rótula (esfera aplastada)
+        // Muslo: más grueso cerca de la cadera, se afina hacia la rodilla
+        const thighProfile = [
+          new THREE.Vector3(thighR * 1.00,         THIGH_LEN / 2,        0),
+          new THREE.Vector3(thighR * 1.06,         THIGH_LEN * 0.30,     0),
+          new THREE.Vector3(thighR * 0.80,        -THIGH_LEN * 0.30,     0),
+          new THREE.Vector3(calfR  * 1.10,        -THIGH_LEN / 2,        0),
+        ];
         mkMesh(
-          new THREE.SphereGeometry(calfR * 1.05, 20, 20),
+          lathe(thighProfile, 28, 32),
+          skinMat,
+          [lx, (THIGH_TOP + KNEE_Y) / 2, 0],
+          [LEG_X, 1, LEG_Z],
+        );
+
+        // Rótula (esfera ligeramente aplastada, pequeña para evitar bandas)
+        mkMesh(
+          new THREE.SphereGeometry(calfR * 0.92, 20, 20),
           skinMat,
           [lx, KNEE_Y, 0],
-          [1.0, 0.72, 1.05],
+          [1.0, 0.62, 1.0],
         );
 
-        // Pantorrilla (rodilla → tobillo)
+        // Pantorrilla: bulto de gemelo cerca de la rodilla, se afina al tobillo
+        const calfProfile = [
+          new THREE.Vector3(calfR  * 0.96,  CALF_LEN / 2,         0),
+          new THREE.Vector3(calfR  * 1.16,  CALF_LEN * 0.22,      0),
+          new THREE.Vector3(calfR  * 0.55, -CALF_LEN * 0.40,      0),
+          new THREE.Vector3(ankleR,        -CALF_LEN / 2,         0),
+        ];
         mkMesh(
-          new THREE.CylinderGeometry(ankleR, calfR, CALF_LEN, 20),
+          lathe(calfProfile, 24, 28),
           skinMat,
           [lx, (ANKLE_Y + KNEE_Y) / 2, 0],
+          [LEG_X, 1, LEG_Z],
+        );
+
+        // Tobillo: bola pequeña para suavizar la unión con el pie
+        mkMesh(
+          new THREE.SphereGeometry(ankleR * 0.9, 16, 16),
+          skinMat,
+          [lx, ANKLE_Y, ankleR * 0.3],
         );
 
         // Pie (caja redondeada)
@@ -334,7 +439,7 @@ export default function AvatarFigure3D({
         const foot = new THREE.Mesh(footGeo, skinMat);
         foot.castShadow    = true;
         foot.receiveShadow = true;
-        foot.position.set(lx, ANKLE_Y - ankleR * 0.55, ankleR * 1.0);
+        foot.position.set(lx, ANKLE_Y - ankleR * 0.42, ankleR * 1.1);
         scene.add(foot);
       });
 
