@@ -5,6 +5,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import AvatarFigure from "@/components/AvatarFigure";
 import AvatarFigure3D from "@/components/AvatarFigure3D";
+import PhotoMeasurement from "@/components/PhotoMeasurement";
 import {
   BodyMeasurements,
   EMPTY_MEASUREMENTS,
@@ -151,20 +152,22 @@ export default function MeasurementsPage() {
               <div>
                 <h2 className="mb-2 text-2xl font-semibold">Fotografías</h2>
                 <p className="mb-6 text-sm text-gray-500">
-                  Opcionales. Mejoran la precisión del avatar pero no son
-                  obligatorias — tus medidas ya generan un avatar a escala.
+                  Opcionales. Una foto de cuerpo completo nos ayuda a calcular
+                  algunas medidas automáticamente — el resto sigue siendo
+                  necesario completarlo a mano.
                 </p>
-                <div className="space-y-4">
-                  {["Frontal", "Lateral", "Posterior"].map((label) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between rounded-xl border p-4"
-                    >
-                      <span className="text-sm font-medium">{label}</span>
-                      <input type="file" accept="image/*" className="text-sm" />
-                    </div>
-                  ))}
-                </div>
+
+                <PhotoMeasurement
+                  knownHeightCm={Number(formData.height) || 0}
+                  onApply={({ shoulders, armLength, legLength }) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      shoulders: clampField("shoulders", shoulders),
+                      armLength: clampField("armLength", armLength),
+                      legLength: clampField("legLength", legLength),
+                    }));
+                  }}
+                />
               </div>
             )}
 
