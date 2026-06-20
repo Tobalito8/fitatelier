@@ -8,6 +8,7 @@ import AvatarFigure3D from "@/components/AvatarFigure3D";
 import PhotoMeasurement from "@/components/PhotoMeasurement";
 import {
   BodyMeasurements,
+  NumericMeasurementKey,
   EMPTY_MEASUREMENTS,
   FIELD_RANGES,
   clampField,
@@ -44,7 +45,7 @@ export default function MeasurementsPage() {
    * Called on blur. If the user left the field empty we store "".
    * Otherwise we parse and clamp to valid human range.
    */
-  function commitField(field: keyof BodyMeasurements, raw: string) {
+  function commitField(field: NumericMeasurementKey, raw: string) {
     if (raw.trim() === "") {
       setFormData((prev) => ({ ...prev, [field]: "" }));
       return;
@@ -109,11 +110,38 @@ export default function MeasurementsPage() {
 
             {/* STEP 1 — General */}
             {step === 1 && (
-              <StepSection title="Datos Generales">
-                <NumberField label="Altura" field="height" value={formData.height} onCommit={commitField} required />
-                <NumberField label="Peso"   field="weight" value={formData.weight} onCommit={commitField} />
-                <NumberField label="Edad"   field="age"    value={formData.age}    onCommit={commitField} />
-              </StepSection>
+              <div>
+                <div className="mb-6">
+                  <span className="mb-2 block text-xs font-medium text-gray-600">
+                    Tipo de cuerpo
+                    <span className="ml-1 text-gray-400">
+                      (define la forma del pecho y algunos detalles del avatar)
+                    </span>
+                  </span>
+                  <div className="flex gap-2">
+                    {(["mujer", "hombre"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, bodyType: opt }))}
+                        className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium capitalize transition-colors ${
+                          formData.bodyType === opt
+                            ? "border-black bg-black text-white"
+                            : "border-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <StepSection title="Datos Generales">
+                  <NumberField label="Altura" field="height" value={formData.height} onCommit={commitField} required />
+                  <NumberField label="Peso"   field="weight" value={formData.weight} onCommit={commitField} />
+                  <NumberField label="Edad"   field="age"    value={formData.age}    onCommit={commitField} />
+                </StepSection>
+              </div>
             )}
 
             {/* STEP 2 — Torso */}
@@ -330,9 +358,9 @@ function NumberField({
   hint,
 }: {
   label: string;
-  field: keyof BodyMeasurements;
+  field: NumericMeasurementKey;
   value: number | "";
-  onCommit: (field: keyof BodyMeasurements, raw: string) => void;
+  onCommit: (field: NumericMeasurementKey, raw: string) => void;
   required?: boolean;
   hint?: string;
 }) {

@@ -6,7 +6,14 @@
  * import from here so they can never drift out of sync.
  */
 
+/** "Mujer" / "hombre" — usado para decidir la forma del pecho (busto vs
+ *  pectorales) y algunos matices de silueta en el avatar 3D. No es una
+ *  medida numérica, así que vive aparte del sistema de rangos/clamp. */
+export type BodyType = "mujer" | "hombre";
+
 export type BodyMeasurements = {
+  bodyType: BodyType;
+
   height: number | "";
   weight: number | "";
   age: number | "";
@@ -28,7 +35,13 @@ export type BodyMeasurements = {
   wrist: number | "";
 };
 
+/** Claves numéricas de BodyMeasurements (todo excepto bodyType). Es lo que
+ *  usan FIELD_RANGES / clampField / MEASUREMENT_FIELDS — bodyType tiene su
+ *  propio control de UI (un toggle), no un NumberField. */
+export type NumericMeasurementKey = Exclude<keyof BodyMeasurements, "bodyType">;
+
 export const EMPTY_MEASUREMENTS: BodyMeasurements = {
+  bodyType: "mujer",
   height: "",
   weight: "",
   age: "",
@@ -48,7 +61,7 @@ export const EMPTY_MEASUREMENTS: BodyMeasurements = {
 };
 
 /** Fields used to compute "profile completion %". */
-export const MEASUREMENT_FIELDS: (keyof BodyMeasurements)[] = [
+export const MEASUREMENT_FIELDS: NumericMeasurementKey[] = [
   "height",
   "weight",
   "age",
@@ -68,11 +81,11 @@ export const MEASUREMENT_FIELDS: (keyof BodyMeasurements)[] = [
 ];
 
 /** Fields strictly required to render an accurate avatar. */
-const CORE_FIELDS: (keyof BodyMeasurements)[] = ["height", "bust", "waist", "hips"];
+const CORE_FIELDS: NumericMeasurementKey[] = ["height", "bust", "waist", "hips"];
 
 /** Sane human ranges, used to clamp/validate on blur. */
 export const FIELD_RANGES: Record<
-  keyof BodyMeasurements,
+  NumericMeasurementKey,
   { min: number; max: number; unit: string }
 > = {
   height:    { min: 120, max: 220, unit: "cm" },
@@ -102,7 +115,8 @@ export function loadMeasurements(): BodyMeasurements {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return EMPTY_MEASUREMENTS;
     const parsed = JSON.parse(raw);
-    return { ...EMPTY_MEASUREMENTS, ...parsed };
+    // Compatibilidad con perfiles guardados antes de agregar bodyType.
+    return { ...EMPTY_MEASUREMENTS, ...parsed, bodyType: parsed.bodyType ?? "mujer" };
   } catch {
     return EMPTY_MEASUREMENTS;
   }
@@ -129,7 +143,7 @@ export function hasMinimumProfile(data: BodyMeasurements): boolean {
   return CORE_FIELDS.every((key) => data[key] !== "" && Number(data[key]) > 0);
 }
 
-export function clampField(key: keyof BodyMeasurements, value: number): number {
+export function clampField(key: NumericMeasurementKey, value: number): number {
   const { min, max } = FIELD_RANGES[key];
   return Math.min(max, Math.max(min, value));
 }
