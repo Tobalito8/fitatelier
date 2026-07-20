@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
-import AvatarFigure from "@/components/AvatarFigure";
-import AvatarFigure3D from "@/components/AvatarFigure3D";
-import PhotoMeasurement from "@/components/PhotoMeasurement";
+import AvatarFigure from "@/components/avatar/AvatarFigure";
+import AvatarFigure3D from "@/components/avatar/AvatarFigure3D";
+import AvatarGLTF from "@/components/avatar/AvatarGLTF";
+import PhotoMeasurement from "@/components/avatar/PhotoMeasurement";
 import {
   BodyMeasurements,
   NumericMeasurementKey,
@@ -25,7 +25,7 @@ export default function MeasurementsPage() {
   const [formData, setFormData]   = useState<BodyMeasurements>(EMPTY_MEASUREMENTS);
   const [hydrated, setHydrated]   = useState(false);
   const [savedToast, setSavedToast] = useState(false);
-  const [viewMode, setViewMode]   = useState<"2d" | "3d">("3d");
+  const [viewMode, setViewMode]   = useState<"real" | "3d" | "2d">("real");
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -65,10 +65,7 @@ export default function MeasurementsPage() {
   }
 
   return (
-    <>
-      <Navbar />
-
-      <main className="min-h-screen bg-stone-50 p-6 md:p-10">
+    <main className="min-h-screen bg-stone-50 p-6 md:p-10">
         <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-[1fr_320px]">
 
           {/* ── Form ── */}
@@ -244,12 +241,21 @@ export default function MeasurementsPage() {
                 <div className="flex rounded-full border bg-stone-50 p-0.5 text-xs">
                   <button
                     type="button"
+                    onClick={() => setViewMode("real")}
+                    className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                      viewMode === "real" ? "bg-black text-white" : "text-gray-500"
+                    }`}
+                  >
+                    3D
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setViewMode("3d")}
                     className={`rounded-full px-3 py-1 font-medium transition-colors ${
                       viewMode === "3d" ? "bg-black text-white" : "text-gray-500"
                     }`}
                   >
-                    3D
+                    3D básico
                   </button>
                   <button
                     type="button"
@@ -269,7 +275,13 @@ export default function MeasurementsPage() {
               </p>
 
               <div className="flex items-center justify-center overflow-hidden rounded-2xl bg-stone-50 py-4">
-                {viewMode === "3d" ? (
+                {viewMode === "real" ? (
+                  <AvatarGLTF
+                    measurements={formData}
+                    width={260}
+                    height={360}
+                  />
+                ) : viewMode === "3d" ? (
                   <AvatarFigure3D
                     measurements={formData}
                     width={260}
@@ -329,7 +341,6 @@ export default function MeasurementsPage() {
           </aside>
         </div>
       </main>
-    </>
   );
 }
 

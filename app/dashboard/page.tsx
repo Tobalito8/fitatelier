@@ -1,13 +1,9 @@
-import Navbar from "@/components/Navbar";
-import Sidebar from "@/components/Sidebar";
-import DashboardCard from "@/components/DashboardCard";
+import Sidebar from "@/components/layout/Sidebar";
+import DashboardCard from "@/components/dashboard/DashboardCard";
 
 export default function DashboardPage() {
   return (
-    <>
-      <Navbar />
-
-      <div className="flex">
+    <div className="flex">
 
         <Sidebar />
 
@@ -63,6 +59,5 @@ export default function DashboardPage() {
         </main>
 
       </div>
-    </>
   );
 }

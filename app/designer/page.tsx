@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import AvatarFigure from "@/components/AvatarFigure";
+import AvatarFigure from "@/components/avatar/AvatarFigure";
+import DressOverlay from "@/components/designer/DressOverlay";
+import { SelectField, SummaryCard } from "@/components/designer/DesignControls";
 import {
   BodyMeasurements,
   EMPTY_MEASUREMENTS,
@@ -17,15 +19,17 @@ import {
   PRODUCTION_DAYS,
   SKIRTS,
   SLEEVES,
-  buildDressPaths,
   computeDressPrice,
 } from "@/lib/garments";
 import type { AvatarMetrics } from "@/lib/measurements";
+import { useShop } from "@/lib/store/shop";
 
 export default function DesignerPage() {
   const [design, setDesign] = useState<DressDesign>(DEFAULT_DRESS_DESIGN);
   const [bodyProfile, setBodyProfile] = useState<BodyMeasurements>(EMPTY_MEASUREMENTS);
   const [hydrated, setHydrated] = useState(false);
+  const [addedId, setAddedId] = useState<string | null>(null);
+  const { addToCart } = useShop();
 
   // Load once on mount. Intentionally done in an effect (not a lazy
   // useState initializer) so the server-rendered HTML always matches the
@@ -44,8 +48,15 @@ export default function DesignerPage() {
     setDesign((prev) => ({ ...prev, [key]: value }));
   }
 
+  function handleAddToCart() {
+    addToCart(design, price, readyProfile ? bodyProfile : null);
+    const token = String(Date.now());
+    setAddedId(token);
+    setTimeout(() => setAddedId((cur) => (cur === token ? null : cur)), 3000);
+  }
+
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-stone-50 lg:grid-cols-[320px_1fr_360px]">
+    <div className="grid min-h-[calc(100vh-8rem)] grid-cols-1 bg-stone-50 lg:grid-cols-[320px_1fr_360px]">
       {/* ── PANEL IZQUIERDO: opciones ── */}
       <aside className="border-r bg-white p-6">
         <h1 className="mb-1 text-2xl font-bold">Diseñador de Vestidos</h1>
@@ -60,9 +71,7 @@ export default function DesignerPage() {
           >
             Aún no tienes medidas completas. Estás viendo una talla
             promedio de referencia.{" "}
-            <span className="font-semibold underline">
-              Completa tu perfil →
-            </span>
+            <span className="font-semibold underline">Completa tu perfil →</span>
           </Link>
         )}
 
@@ -105,20 +114,18 @@ export default function DesignerPage() {
                 className="h-12 w-16 cursor-pointer rounded"
               />
               <div className="flex flex-wrap gap-2">
-                {["#111111", "#1A237E", "#880E4F", "#4A148C", "#C8A96B", "#1B5E20"].map(
-                  (hex) => (
-                    <button
-                      key={hex}
-                      type="button"
-                      onClick={() => update("color", hex)}
-                      className={`h-7 w-7 rounded-full border-2 transition-transform ${
-                        design.color === hex ? "scale-110 border-black" : "border-transparent"
-                      }`}
-                      style={{ backgroundColor: hex }}
-                      aria-label={hex}
-                    />
-                  )
-                )}
+                {["#111111", "#1A237E", "#880E4F", "#4A148C", "#C8A96B", "#1B5E20"].map((hex) => (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => update("color", hex)}
+                    className={`h-7 w-7 rounded-full border-2 transition-transform ${
+                      design.color === hex ? "scale-110 border-black" : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: hex }}
+                    aria-label={hex}
+                  />
+                ))}
               </div>
             </div>
           </div>
@@ -140,9 +147,7 @@ export default function DesignerPage() {
               measurements={bodyProfile}
               width={260}
               height={500}
-              renderGarment={(m: AvatarMetrics) => (
-                <DressOverlay design={design} metrics={m} />
-              )}
+              renderGarment={(m: AvatarMetrics) => <DressOverlay design={design} metrics={m} />}
             />
 
             <div className="mt-6 text-center text-sm">
@@ -192,136 +197,24 @@ export default function DesignerPage() {
             <p className="text-3xl font-bold">${price} USD</p>
           </div>
 
-          <button className="w-full rounded-xl bg-black p-4 text-white">
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            className="w-full rounded-xl bg-black p-4 text-white transition-colors hover:bg-gray-800"
+          >
             Agregar al Carrito
           </button>
+
+          {addedId && (
+            <p className="text-center text-sm font-medium text-emerald-600">
+              ✓ Agregado al carrito.{" "}
+              <Link href="/cart" className="underline">
+                Ver carrito →
+              </Link>
+            </p>
+          )}
         </div>
       </aside>
-    </div>
-  );
-}
-
-/* ── Dress overlay: pure SVG, anchored to the avatar's real metrics  ── */
-function DressOverlay({
-  design,
-  metrics,
-}: {
-  design: DressDesign;
-  metrics: AvatarMetrics;
-}) {
-  const { bodicePath, skirtPath, leftSleeve, rightSleeve } = buildDressPaths(
-    design,
-    metrics
-  );
-  const fabric = FABRICS.find((f) => f.value === design.fabric);
-  const opacity = fabric?.swatchOpacity ?? 1;
-
-  const cx = metrics.centerX;
-  const necklineCutouts: Record<string, React.ReactNode> = {
-    V: (
-      <path
-        d={`
-          M ${cx - metrics.bustHalfWidth * 0.45} ${metrics.shoulderY}
-          L ${cx} ${metrics.shoulderY + (metrics.bustY - metrics.shoulderY) * 1.1}
-          L ${cx + metrics.bustHalfWidth * 0.45} ${metrics.shoulderY}
-          Z
-        `}
-        fill="#E8C4A0"
-      />
-    ),
-    Corazón: (
-      <path
-        d={`
-          M ${cx - metrics.bustHalfWidth * 0.4} ${metrics.shoulderY}
-          Q ${cx - metrics.bustHalfWidth * 0.15} ${metrics.shoulderY - metrics.head.r * 0.3}
-            ${cx} ${metrics.shoulderY + metrics.head.r * 0.15}
-          Q ${cx + metrics.bustHalfWidth * 0.15} ${metrics.shoulderY - metrics.head.r * 0.3}
-            ${cx + metrics.bustHalfWidth * 0.4} ${metrics.shoulderY}
-          L ${cx} ${metrics.shoulderY + (metrics.bustY - metrics.shoulderY) * 0.9}
-          Z
-        `}
-        fill="#E8C4A0"
-      />
-    ),
-    Cuadrado: (
-      <rect
-        x={cx - metrics.bustHalfWidth * 0.4}
-        y={metrics.shoulderY}
-        width={metrics.bustHalfWidth * 0.8}
-        height={(metrics.bustY - metrics.shoulderY) * 0.55}
-        fill="#E8C4A0"
-      />
-    ),
-  };
-
-  return (
-    <g>
-      {/* Sleeves drawn first so the bodice slightly overlaps the shoulder seam */}
-      {leftSleeve && (
-        <ellipse
-          cx={leftSleeve.cx}
-          cy={leftSleeve.cy}
-          rx={leftSleeve.rx}
-          ry={leftSleeve.ry}
-          fill={design.color}
-          opacity={opacity}
-        />
-      )}
-      {rightSleeve && (
-        <ellipse
-          cx={rightSleeve.cx}
-          cy={rightSleeve.cy}
-          rx={rightSleeve.rx}
-          ry={rightSleeve.ry}
-          fill={design.color}
-          opacity={opacity}
-        />
-      )}
-
-      <path d={bodicePath} fill={design.color} opacity={opacity} stroke="black" strokeWidth={1.5} />
-      <path d={skirtPath} fill={design.color} opacity={opacity * 0.92} stroke="black" strokeWidth={1.5} />
-
-      {necklineCutouts[design.neckline] ?? null}
-    </g>
-  );
-}
-
-/* ── Small UI helpers ── */
-
-function SelectField<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div>
-      <h3 className="mb-2 font-semibold">{label}</h3>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="w-full rounded-lg border p-3"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function SummaryCard({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-xl border p-4">
-      <h3 className="font-semibold">{title}</h3>
-      <p>{value}</p>
     </div>
   );
 }
