@@ -70,6 +70,52 @@ function applyMeasurements(refs: SceneRefs, m: BodyMeasurements) {
   modelGroup.position.y = 0;
 }
 
+/**
+ * Corrige un defecto del .glb: los Shape Keys del cuerpo (bust/waist/hips/
+ * shoulders/thigh) también arrastran los vértices de la cabeza y la cara.
+ * Como los ojos y el pelo son mallas SEPARADAS sin esos morphs, se
+ * despegaban del cuerpo al cambiar las medidas.
+ *
+ * Aquí atenuamos los deltas de morph por altura: morph completo en el torso,
+ * cero en la cara/cráneo, con un desvanecido suave a lo largo del cuello para
+ * que no haya un corte brusco. Así la cara queda fija y ojos + pelo se
+ * mantienen en su lugar, mientras el torso sigue deformándose con normalidad.
+ *
+ * Se ejecuta UNA sola vez, justo después de cargar el modelo y ANTES de que
+ * la malla se renderice por primera vez (para que el morph texture interno de
+ * Three.js se construya ya con los deltas corregidos).
+ */
+function freezeHeadMorphs(mesh: THREE.Mesh) {
+  const geom = mesh.geometry;
+  const pos = geom.attributes.position;
+  const morphs = geom.morphAttributes.position;
+  if (!pos || !morphs || morphs.length === 0) return;
+
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const H = maxY - minY || 1;
+  const yFull = minY + 0.85 * H;    // por debajo: morph completo (incluye hombros/base del cuello)
+  const yFrozen = minY + 0.915 * H; // por encima: cara, cráneo y pelo → morph congelado
+
+  for (const attr of morphs) {
+    for (let i = 0; i < attr.count; i++) {
+      const y = pos.getY(i);
+      let w = 1;
+      if (y >= yFrozen) w = 0;
+      else if (y > yFull) w = 1 - (y - yFull) / (yFrozen - yFull);
+      if (w < 1) {
+        attr.setXYZ(i, attr.getX(i) * w, attr.getY(i) * w, attr.getZ(i) * w);
+      }
+    }
+    attr.needsUpdate = true;
+  }
+}
+
 export default function AvatarGLTF({
   measurements,
   width = 340,
@@ -215,6 +261,10 @@ export default function AvatarGLTF({
             );
             return;
           }
+
+          // Evita que los Shape Keys del cuerpo arrastren la cabeza/cara,
+          // lo que despegaba ojos y pelo (mallas separadas sin morphs).
+          freezeHeadMorphs(skinMesh);
 
           modelGroup.add(root);
 
